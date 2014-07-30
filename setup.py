@@ -8,6 +8,6 @@ setup(name='wwwatch',
       author='Victor Makarov',
       author_email='vitja.makarov@gmail.com',
       packages=['wwwatch'],
-      scripts=['bin/wwwatch'],
+      scripts=['bin/wwwatch', 'bin/wwwatch-carbon'],
       url='https://github.com/vitek/wwwatch',
       license='MIT')
