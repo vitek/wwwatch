@@ -1,0 +1,5 @@
+include wwwatch/*.py
+include setup.py
+include bin/wwwatch
+include README
+include LICENSE
