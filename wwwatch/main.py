@@ -6,7 +6,7 @@ from collections import defaultdict
 
 import redis
 
-from .accesslog import parseline, parse_accesslog_date
+from .accesslog import parseline, parse_accesslog_date, ParseError
 from .taillog import Taillog
 
 
@@ -89,7 +89,11 @@ class WWWatchWorker(object):
         with closing(Taillog(self.fname, position=position,
                              idle_func=self.flush)) as taillog:
             for line in taillog:
-                line = parseline(line)
+                try:
+                    line = parseline(line)
+                except ParseError:
+                    self.counter['errors'] += 1
+                    continue
                 timestamp = parse_accesslog_date(line.date)
 
                 handle_line(self.counter, line)
