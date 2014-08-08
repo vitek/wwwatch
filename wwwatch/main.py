@@ -46,9 +46,10 @@ def handle_line(counter, line):
         utimes = comma_split(extra['ut'])
         for upstream_time in utimes:
             try:
-                counter['upstream_time'] += float(upstream_time)
+                upstream_time = float(upstream_time)
             except ValueError:
-                from ipdb import set_trace; set_trace()
+                continue
+            counter['upstream_time'] += upstream_time
             counter['upstream'] += 1
         if len(utimes) > 1:
             counter['upstream_next'] += len(utimes) - 1
