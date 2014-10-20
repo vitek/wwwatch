@@ -4,7 +4,6 @@ import socket
 from contextlib import closing
 from collections import defaultdict
 
-from .storage import RedisStorage, JSONFileStorage
 from .accesslog import parseline, parse_accesslog_date, ParseError
 from .taillog import Taillog
 
@@ -82,42 +81,3 @@ class WWWatchWorker(object):
                 elif (timestamp - last_flush) > self.flush_interval:
                     self.flush(taillog)
                     last_flush = timestamp
-
-
-def main():
-    import argparse
-
-    parser = argparse.ArgumentParser(
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--storage', choices=['redis', 'json'], default='redis',
-                        help="Counters storage")
-
-    group = parser.add_argument_group('Redis storage')
-    group.add_argument('--redis-hostname', help='Redis server hostname',
-                       default='localhost')
-    group.add_argument('--redis-port', help='Redis server port',
-                       type=int, default=6379)
-
-    group = parser.add_argument_group('JSON file storage')
-    group.add_argument('--json-path', default='./accesslog.json',
-                       help='Path to json file')
-
-    parser.add_argument('access_log', help="Path to access log file",
-                        metavar="access-log")
-    parser.add_argument('name', help="Redis key name")
-
-    args = parser.parse_args()
-
-    if args.storage == 'redis':
-        storage = RedisStorage(args.redis_hostname, args.redis_port, args.name)
-    elif args.storage == 'json':
-        storage = JSONFileStorage('foo.json')
-    else:
-        parser.error('Unknown storage type')
-
-    worker = WWWatchWorker(storage, args.access_log, args.name)
-    worker.run()
-
-
-if __name__ == "__main__":
-    main()
