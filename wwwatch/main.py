@@ -4,24 +4,13 @@ import socket
 from contextlib import closing
 from collections import defaultdict
 
-import redis
-
+from .storage import RedisStorage
 from .accesslog import parseline, parse_accesslog_date, ParseError
 from .taillog import Taillog
 
 
 def comma_split(string):
     return [i.strip() for i in string.split(',')]
-
-
-def flush_counter(pipe, name, counter):
-    for key, value in counter.iteritems():
-        if type(value) is int:
-            pipe.hincrby(name, key, value)
-        elif type(value) is float:
-            pipe.hincrbyfloat(name, key, value)
-        else:
-            raise ValueError("Unsupported counter type for {}".format(key))
 
 
 def handle_line(counter, line):
@@ -56,35 +45,23 @@ def handle_line(counter, line):
 
 
 class WWWatchWorker(object):
-    def __init__(self, redis, fname, name, flush_interval=15):
-        self.redis = redis
+    def __init__(self, storage, fname, name, flush_interval=15):
+        self.storage = storage
+        self.counter = defaultdict(int)
         self.fname = fname
         self.name = name
         self.flush_interval = flush_interval
-        self.counter = defaultdict(int)
-        self.hostname = socket.gethostname()
-        self.key_path = '{}@{}:path'.format(self.name, self.hostname)
-        self.key_position = '{}@{}:position'.format(self.name, self.hostname)
 
     def flush(self, taillog):
         if not self.counter:
             return
         path, position = taillog.get_position()
-        with self.redis.pipeline() as pipe:
-            flush_counter(pipe, self.name, self.counter)
-            flush_counter(pipe, '{}@{}'.format(self.name, self.hostname),
-                          self.counter)
-            pipe.set(self.key_position, position)
-            pipe.set(self.key_path, path)
-            pipe.execute()
-        self.counter.clear()
+        self.storage.flush(self.counter, path, position)
 
     def run(self):
-        path, position = self.redis.mget(self.key_path, self.key_position)
+        path, position = self.storage.get_last_position()
         if path != self.fname:
             position = 0
-        else:
-            position = int(position)
 
         last_flush = None
         with closing(Taillog(self.fname, position=position,
@@ -122,9 +99,9 @@ def main():
 
     args = parser.parse_args()
 
-    redis_client = redis.StrictRedis(args.redis_hostname, args.redis_port)
+    storage = RedisStorage(args.redis_hostname, args.redis_port, args.name)
 
-    worker = WWWatchWorker(redis_client, args.access_log, args.name)
+    worker = WWWatchWorker(storage, args.access_log, args.name)
     worker.run()
 
 
