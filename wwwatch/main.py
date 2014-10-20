@@ -4,7 +4,7 @@ import socket
 from contextlib import closing
 from collections import defaultdict
 
-from .storage import RedisStorage
+from .storage import RedisStorage, JSONFileStorage
 from .accesslog import parseline, parse_accesslog_date, ParseError
 from .taillog import Taillog
 
@@ -57,6 +57,7 @@ class WWWatchWorker(object):
             return
         path, position = taillog.get_position()
         self.storage.flush(self.counter, path, position)
+        self.counter.clear()
 
     def run(self):
         path, position = self.storage.get_last_position()
@@ -88,10 +89,18 @@ def main():
 
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--redis-hostname', help='Redis server hostname',
-                        default='localhost')
-    parser.add_argument('--redis-port', help='Redis server port',
-                        type=int, default=6379)
+    parser.add_argument('--storage', choices=['redis', 'json'], default='redis',
+                        help="Counters storage")
+
+    group = parser.add_argument_group('Redis storage')
+    group.add_argument('--redis-hostname', help='Redis server hostname',
+                       default='localhost')
+    group.add_argument('--redis-port', help='Redis server port',
+                       type=int, default=6379)
+
+    group = parser.add_argument_group('JSON file storage')
+    group.add_argument('--json-path', default='./accesslog.json',
+                       help='Path to json file')
 
     parser.add_argument('access_log', help="Path to access log file",
                         metavar="access-log")
@@ -99,7 +108,12 @@ def main():
 
     args = parser.parse_args()
 
-    storage = RedisStorage(args.redis_hostname, args.redis_port, args.name)
+    if args.storage == 'redis':
+        storage = RedisStorage(args.redis_hostname, args.redis_port, args.name)
+    elif args.storage == 'json':
+        storage = JSONFileStorage('foo.json')
+    else:
+        parser.error('Unknown storage type')
 
     worker = WWWatchWorker(storage, args.access_log, args.name)
     worker.run()
