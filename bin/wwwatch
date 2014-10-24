@@ -36,7 +36,7 @@ def main():
     else:
         parser.error('Unknown storage type')
 
-    worker = WWWatchWorker(storage, args.access_log, args.name)
+    worker = WWWatchWorker(storage, args.access_log)
     worker.run()
 
 if __name__ == "__main__":

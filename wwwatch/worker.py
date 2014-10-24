@@ -44,11 +44,10 @@ def handle_line(counter, line):
 
 
 class WWWatchWorker(object):
-    def __init__(self, storage, fname, name, flush_interval=15):
+    def __init__(self, storage, fname, flush_interval=15):
         self.storage = storage
         self.counter = defaultdict(int)
         self.fname = fname
-        self.name = name
         self.flush_interval = flush_interval
 
     def flush(self, taillog):
