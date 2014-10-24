@@ -16,6 +16,8 @@ def main():
                        default='localhost')
     group.add_argument('--redis-port', help='Redis server port',
                        type=int, default=6379)
+    group.add_argument('--redis-key', help='Reids key',
+                       default='accesslog')
 
     group = parser.add_argument_group('JSON file storage')
     group.add_argument('--json-path', default='./accesslog.json',
@@ -23,12 +25,12 @@ def main():
 
     parser.add_argument('access_log', help="Path to access log file",
                         metavar="access-log")
-    parser.add_argument('name', help="Redis key name")
 
     args = parser.parse_args()
 
     if args.storage == 'redis':
-        storage = RedisStorage(args.redis_hostname, args.redis_port, args.name)
+        storage = RedisStorage(args.redis_hostname, args.redis_port,
+                               args.redis_key)
     elif args.storage == 'json':
         storage = JSONFileStorage(args.json_path)
     else:
