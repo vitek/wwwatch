@@ -7,7 +7,7 @@ class Taillog(object):
         self.delay = delay
         self.path = path
         self.fp = None
-        self.fp_id = None
+        self.fp_inode = None
         self.initial_position = position
         self.idle_func = idle_func
 
@@ -26,46 +26,51 @@ class Taillog(object):
         else:
             return (None, 0)
 
-    def _open(self):
-        if self.fp is None:
-            try:
-                self.fp = open(self.path, 'rt')
-            except IOError:
-                return False
-            st = os.fstat(self.fp.fileno())
-            self.fp_inode = st.st_ino
-            # Restore position
-            if self.initial_position:
-                if self.initial_position <= st.st_size:
-                    self.fp.seek(self.initial_position - 1)
-                    if self.fp.read(1) != '\n':
-                        self.fp.seek(0)
-                self.initial_position = 0
+    def open(self):
+        try:
+            self.fp = open(self.path, 'rt')
+        except IOError:
+            return False
+        st = os.fstat(self.fp.fileno())
+        self.fp_inode = st.st_ino
+        self.restore_initial_position()
         return True
+
+    def restore_initial_position(self):
+        if self.initial_position:
+            st = os.fstat(self.fp.fileno())
+            if self.initial_position <= st.st_size:
+                self.fp.seek(self.initial_position - 1)
+                if self.fp.read(1) != '\n':
+                    self.fp.seek(0)
+            self.initial_position = 0
 
     def sleep(self):
         if self.idle_func:
             self.idle_func(self)
         time.sleep(self.delay)
 
+    def check_eof(self):
+        try:
+            st = os.stat(self.path)
+        except OSError:
+            return False
+        return st.st_ino != self.fp_inode
+
     def next(self):
         line = ''
         while True:
-            while not self._open():
-                self.sleep()
+            if self.fp is None:
+                while not self.open():
+                    self.sleep()
+                line = ''
             line += self.fp.readline()
             if line[-1:] == '\n':
                 return line
-            if not line:
-                # Check that it's a new file
-                try:
-                    st = os.stat(self.path)
-                except OSError:
-                    pass
-                else:
-                    if st.st_ino != self.fp_inode:
-                        self.close()
-                        continue
+            # XXX: last line may be lost
+            if self.check_eof():
+                self.close()
+                continue
             self.sleep()
 
 
