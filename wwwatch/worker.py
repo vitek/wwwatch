@@ -46,7 +46,7 @@ def handle_line(counter, line):
 class WWWatchWorker(object):
     def __init__(self, storage, fname, flush_interval=15):
         self.storage = storage
-        self.counter = defaultdict(int)
+        self.counter = storage.register_counter()
         self.fname = fname
         self.flush_interval = flush_interval
         self.subscribers = []
@@ -55,8 +55,7 @@ class WWWatchWorker(object):
         if not self.counter:
             return
         path, position = taillog.get_position()
-        self.storage.flush(self.counter, path, position)
-        self.counter.clear()
+        self.storage.flush(path, position)
 
     def run(self):
         path, position = self.storage.get_last_position()
@@ -66,9 +65,9 @@ class WWWatchWorker(object):
         last_flush = None
         with closing(Taillog(self.fname, position=position,
                              idle_func=self.flush)) as taillog:
-            for line in taillog:
+            for raw_line in taillog:
                 try:
-                    line = parseline(line)
+                    line = parseline(raw_line)
                 except ParseError:
                     self.counter['errors'] += 1
                     continue

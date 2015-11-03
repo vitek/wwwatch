@@ -1,10 +1,19 @@
 import socket
 import json
+from collections import defaultdict
 
 import redis
 
 
 class BasicStorage(object):
+    def __init__(self):
+        self.counters = {}
+
+    def register_counter(self, name=''):
+        if name not in self.counters:
+            self.counters[name] = defaultdict(int)
+        return self.counters[name]
+
     def flush(self, counter, path, position):
         raise NotImplementedError
 
@@ -13,12 +22,13 @@ class BasicStorage(object):
 
 
 class RedisStorage(BasicStorage):
-    def __init__(self, hostname, port, name):
+    def __init__(self, hostname, port, prefix):
+        super(RedisStorage, self).__init__()
         self.redis = redis.StrictRedis(hostname, port)
-        self.name = name
+        self.prefix = prefix
         self.hostname = socket.gethostname()
-        self.key_path = '{}@{}:path'.format(self.name, self.hostname)
-        self.key_position = '{}@{}:position'.format(self.name, self.hostname)
+        self.key_path = '{}@{}:path'.format(self.prefix, self.hostname)
+        self.key_position = '{}@{}:position'.format(self.prefix, self.hostname)
 
     def flush_counter(self, counter, pipe, name):
         for key, value in counter.iteritems():
@@ -29,14 +39,21 @@ class RedisStorage(BasicStorage):
             else:
                 raise ValueError("Unsupported counter type for {}".format(key))
 
-    def flush(self, counter, path, position):
+    def flush(self, path, position):
         with self.redis.pipeline() as pipe:
-            self.flush_counter(counter, pipe, self.name)
-            self.flush_counter(counter, pipe,
-                               '{}@{}'.format(self.name, self.hostname))
-            pipe.set(self.key_position, position)
-            pipe.set(self.key_path, path)
+            for name, counter in self.counters.iteritems():
+                if name:
+                    key_name = '{}:{}'.format(self.prefix, name)
+                else:
+                    key_name = self.prefix
+                self.flush_counter(counter, pipe, key_name)
+                self.flush_counter(counter, pipe,
+                                   '{}@{}'.format(key_name, self.hostname))
+                pipe.set(self.key_position, position)
+                pipe.set(self.key_path, path)
             pipe.execute()
+        for counter in self.counters.itervalues():
+            counter.clear()
 
     def get_last_position(self):
         path, position = self.redis.mget(self.key_path, self.key_position)
@@ -47,6 +64,7 @@ class RedisStorage(BasicStorage):
 
 class JSONFileStorage(BasicStorage):
     def __init__(self, path):
+        super(JSONFileStorage, self).__init__()
         self.path = path
 
     def read(self):
@@ -55,8 +73,6 @@ class JSONFileStorage(BasicStorage):
                 data = json.load(fp)
         except IOError:
             data = {}
-        if 'counters' not in data:
-            data['counters'] = {}
         return data
 
     def write(self, data):
@@ -68,11 +84,17 @@ class JSONFileStorage(BasicStorage):
         data = self.read()
         return data.get('path', None), data.get('position', 0)
 
-    def flush(self, counter, path, position):
+    def flush(self, path, position):
         data = self.read()
         data['path'] = path
         data['position'] = position
-        json_counters = data['counters']
-        for key, value in counter.iteritems():
-            json_counters[key] = json_counters.get(key, 0) + value
+        for name, counter in self.counters.iteritems():
+            if not name:
+                name = 'counters'
+            json_counters = data.setdefault(name, {})
+            for key, value in counter.iteritems():
+                json_counters[key] = json_counters.get(key, 0) + value
         self.write(data)
+
+        for counter in self.counters.itervalues():
+            counter.clear()
