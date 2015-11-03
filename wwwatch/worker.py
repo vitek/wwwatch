@@ -49,6 +49,7 @@ class WWWatchWorker(object):
         self.counter = defaultdict(int)
         self.fname = fname
         self.flush_interval = flush_interval
+        self.subscribers = []
 
     def flush(self, taillog):
         if not self.counter:
@@ -74,6 +75,9 @@ class WWWatchWorker(object):
                 timestamp = parse_accesslog_date(line.date)
 
                 handle_line(self.counter, line)
+
+                for subscriber in self.subscribers:
+                    subscriber(self.counter, line, timestamp, raw_line)
 
                 if last_flush is None:
                     last_flush = timestamp

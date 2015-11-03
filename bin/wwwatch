@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import argparse
+from importlib import import_module
 
 from wwwatch.worker import WWWatchWorker
 from wwwatch.storage import RedisStorage, JSONFileStorage
@@ -23,6 +24,8 @@ def main():
     group.add_argument('--json-path', default='./accesslog.json',
                        help='Path to json file')
 
+    parser.add_argument('--plugin', help="Additional plugin")
+
     parser.add_argument('access_log', help="Path to access log file",
                         metavar="access-log")
 
@@ -36,7 +39,13 @@ def main():
     else:
         parser.error('Unknown storage type')
 
+    plugins = []
+    if args.plugin:
+        plugins.append(import_module(args.plugin))
+
     worker = WWWatchWorker(storage, args.access_log)
+    for plugin in plugins:
+        plugin.setup_wwwatch_plugin(worker)
     worker.run()
 
 if __name__ == "__main__":
